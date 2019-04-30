@@ -1,6 +1,5 @@
 /* eslint-disable */
 const fs = require('fs');
-const { pipeline } = require('stream');
 const LimitSizeStream = require('./LimitSizeStream');
 const LimitExceededError = require('./LimitExceededError');
 
