@@ -1,23 +1,1 @@
-const url = require('url');
-const http = require('http');
-const path = require('path');
-
-const server = new http.Server();
-
-server.on('request', (req, res) => {
-  const pathname = url.parse(req.url).pathname.slice(1);
-
-  const filepath = path.join(__dirname, 'files', pathname);
-
-  switch (req.method) {
-    case 'POST':
-
-      break;
-
-    default:
-      res.statusCode = 501;
-      res.end('Not implemented');
-  }
-});
-
-module.exports = server;
+/* eslint-disable */const url = require('url');const http = require('http');const path = require('path');const fs = require('fs');const LimitSizeStream = require('./LimitSizeStream');const createFile = require('./create-file');const FilesDirectory = path.join(__dirname, 'files');const server = new http.Server();server.on('request', (req, res) => {    const pathname = url.parse(req.url).pathname.slice(1);    const filepath = path.join(FilesDirectory, pathname);    switch (req.method) {        case 'POST':            // if (/\//g.test(pathname)) {            //     res.statusCode = 400;            //     res.end('Bad request');            //     return;            // }            // if (fs.existsSync(filepath)) {            //     res.statusCode = 409;            //     res.end('File already exists');            //     return;            // }            // createFile(filepath, req, res);            // break;            const limitStream = new LimitSizeStream({ limit: 1e6 });            // console.log(filepath);            if (fs.existsSync(filepath)) {                res.statusCode = 409;                res.end('File already exists!')                return;            }            const wstream = fs.createWriteStream(filepath, { flags: 'wx' });            req                .on('aborted', () => {                    // wstream.destroy();                    // console.error('ABORTED CONNECTION');                    wstream.close();                    deleteFile(filepath);                })                .on('error', () => {                    // fs.unlink(filepath, (err) => {                    //     console.error(err);                    // });                    res.end('Error');                });            wstream                .on('error', (err) => {                    // if (err.code === 'EEXIST') {                    //     res.statusCode = 409;                    //     res.end('File already exists!')                    //     return;                    // }                    res.statusCode = 500;                    // fs.unlink(filepath, (err) => {                    //     console.error(err);                    // });                    res.end('Server error!');                })                // .on('close', (a,b,c) => {                //     console.log(a,b,c);                // })                .on('finish', () => {                    res.statusCode = 201;                    res.end('CREATED!');                    wstream.close();                });            req                .pipe(limitStream)                .on('error', () => {                    res.statusCode = 413;                    res.end('Too large file!');                    wstream.close();                    deleteFile(filepath);                })                .pipe(wstream);            break;        default:            res.statusCode = 501;            res.end('Not implemented');    }});function deleteFile(filepath) {    // console.log('Start deleting file ', filepath);    try {        fs.unlink(filepath, (err) => {            // console.error(err);        });    } catch (e) {        // console.error('failed remove file!', e);    }}module.exports = server;
