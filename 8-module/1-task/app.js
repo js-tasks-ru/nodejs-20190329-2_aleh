@@ -77,12 +77,42 @@ router.post('/oauth_callback', handleMongooseValidationError, async (ctx, next) 
   })(ctx, next);
 });
 
-router.post('/register', async (ctx, next) => {
+router.post('/register', handleMongooseValidationError, async (ctx, next) => {
+  const verificationToken = uuid();
+  const { email, displayName, password } = ctx.request.body;
+  const user = new User({ email, displayName, verificationToken });
+  await user.setPassword(password);
+  await user.save();
 
+  await sendMail({
+    template: 'confirmation',
+    locals: {
+      token: verificationToken,
+    },
+    to: email,
+    subject: 'Подтверждение регистрации',
+  });
+
+  ctx.body = { status: 'ok' };
 });
 
 router.post('/confirm', async (ctx) => {
+  const { verificationToken } = ctx.request.body;
+  try {
+    const updatedUser = await User.findOneAndUpdate({ verificationToken }, { $unset: { verificationToken: '' } }, { new: true });
+    if (!updatedUser) {
+      ctx.status = 400;
+      ctx.body = { error: 'Ссылка подтверждения недействительна или устарела' };
+      return;
+    }
 
+    const token = uuid();
+    ctx.body = { token };
+
+  } catch (e) {
+    ctx.status = 500;
+    ctx.body = 'Internal server error';
+  }
 });
 
 app.use(router.routes());
